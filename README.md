@@ -1,5 +1,7 @@
 # travel-agent-ai
 
+[![tests](https://github.com/zakst/travel-agent-ai/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/zakst/travel-agent-ai/actions/workflows/tests.yml)
+
 A Python AI agent that researches flights and hotels for a trip and produces a
 markdown report with recommendations. **It does NOT book anything** — it
 gathers options from real APIs, reasons about them, and writes a report.
@@ -66,6 +68,7 @@ without an `end_turn` we raise.
 | `pytest.ini` | Pytest config, registers `integration` marker |
 | `tests/` | Pytest suite with respx-mocked HTTP |
 | `tests/test_integration.py` | Live-API tests (skipped without creds) |
+| `.github/workflows/tests.yml` | GitHub Actions CI: runs unit tests on push/PR to `main` |
 
 ## Setup
 
@@ -132,6 +135,18 @@ Integration tests are marked with `@pytest.mark.integration` and skip
 themselves when `DUFFEL_ACCESS_TOKEN` is missing. Open-Meteo integration
 tests always run because the API needs no key.
 
+### Continuous integration
+
+`.github/workflows/tests.yml` runs the unit suite on every push to `main`
+and every pull request targeting `main`, on Python 3.10, 3.11, and 3.12.
+No secrets are required — the suite is fully respx-mocked. Concurrent runs
+on the same ref are cancelled to save CI minutes.
+
+To run the live-API suite in CI (optional, requires Stays access on your
+Duffel token), add a `DUFFEL_ACCESS_TOKEN` repo secret and a second job
+gated on `workflow_dispatch` — see the comment block at the bottom of the
+workflow file for a copy-pastable example.
+
 ## A note on the model
 
 `DEFAULT_MODEL` in `agent.py` is `claude-sonnet-4-6`, a balanced default.
@@ -156,6 +171,19 @@ run_agent("...", model="claude-opus-4-7")
 
 ## Limitations
 
-- Open-Meteo forecasts beyond ~14 days out are unreliable.
+- **Duffel test mode returns sandbox data only** — never present its prices
+  to a user as real-world quotes. Apply for production access on the Duffel
+  dashboard for live airline inventory.
+- **Duffel Stays requires a separate access request** from the Duffel
+  dashboard ("Contact sales" on the Stays card). Flights work immediately
+  without it. While Stays is gated, the agent will still produce a report
+  with neighborhood + lodging-style recommendations instead of specific
+  prices.
+- **Open-Meteo's live forecast covers ~16 days ahead.** For trips further
+  out, `get_weather_forecast` automatically falls back to historical
+  climatology — averages of the same calendar dates from the past 3 years.
+  Real numbers, but historical, not predictive (the response is tagged
+  `"source": "historical_climatology"`).
 - The agent **does nothing actually-bookable** — by design. It reads, it
-  reasons.
+  reasons, it writes a report. Booking is a separate (and much riskier)
+  problem.

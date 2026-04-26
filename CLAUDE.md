@@ -81,6 +81,11 @@ pytest -m integration  # live-API tests (require real credentials)
 pytest tests/test_tools.py::test_search_flights_parses_duffel_offers
 ```
 
+CI runs `.github/workflows/tests.yml` on every push to `main` and every
+PR targeting `main`, across Python 3.10/3.11/3.12. No secrets needed —
+the unit suite is fully respx-mocked. Integration tests are intentionally
+not part of CI; gate them on `workflow_dispatch` if you ever want them.
+
 When adding a new tool, write at minimum:
 - A parse-success test
 - A parse-empty-input test
@@ -125,8 +130,17 @@ import tools; print(tools.get_weather_forecast('Tokyo', '2026-06-15', '2026-06-2
   we geocode the city name first, via Open-Meteo.
 - **Durations come as ISO 8601 (`PT11H30M`)** and need parsing. For
   round-trips, sum the durations across both slices.
-- **Open-Meteo forecasts beyond ~14 days are unreliable** — agent tools
-  don't enforce this, so trip dates further out can produce noisy data.
+- **Open-Meteo's `/forecast` rejects dates >~16 days ahead with a 400.**
+  `get_weather_forecast` detects this via `_today()` and routes far-out
+  dates to `_historical_climatology`, which samples the archive API for
+  the same calendar dates across the last 3 years and averages them.
+  Climatology results are tagged `"source": "historical_climatology"` so
+  the agent can frame them as "typical" rather than "the forecast says".
+- **Tests pin the clock with the `fix_today` fixture** (set to
+  2026-06-12) so the existing weather-forecast tests deterministically
+  hit the live-forecast branch. The new climatology test monkeypatches
+  `tools._today` directly to push the trip dates outside the forecast
+  window.
 - **Open-Meteo geocoding returns `{}` for unknown cities** (no `results`
   key at all) — don't crash on missing keys.
 
